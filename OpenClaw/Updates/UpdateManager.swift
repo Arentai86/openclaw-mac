@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 #if canImport(Sparkle)
@@ -13,7 +14,40 @@ final class UpdateManager: NSObject {
     )
     #endif
 
+    static var configurationProblem: String? {
+        guard let feedURLString = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+              let feedURL = URL(string: feedURLString),
+              feedURL.scheme?.lowercased() == "https" else {
+            return "Sparkle feed URL is missing or is not HTTPS."
+        }
+
+        guard let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+              publicKey.isEmpty == false,
+              publicKey != "REPLACE_WITH_SPARKLE_PUBLIC_EDDSA_KEY",
+              Data(base64Encoded: publicKey) != nil else {
+            return "Sparkle public EdDSA key is not configured."
+        }
+
+        return nil
+    }
+
+    var isConfigured: Bool {
+        Self.configurationProblem == nil
+    }
+
     func checkForUpdates() {
+        guard isConfigured else {
+            let message = Self.configurationProblem ?? "Sparkle is not configured."
+            NSLog("OpenClaw updates disabled: \(message)")
+            let alert = NSAlert()
+            alert.messageText = "Updates are not configured"
+            alert.informativeText = "OpenClaw can run normally, but automatic updates need a real Sparkle EdDSA public key before release."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+
         #if canImport(Sparkle)
         updaterController.checkForUpdates(nil)
         #else
@@ -23,6 +57,7 @@ final class UpdateManager: NSObject {
 
     var automaticallyChecksForUpdates: Bool {
         get {
+            guard isConfigured else { return false }
             #if canImport(Sparkle)
             return updaterController.updater.automaticallyChecksForUpdates
             #else
@@ -30,10 +65,13 @@ final class UpdateManager: NSObject {
             #endif
         }
         set {
+            guard isConfigured else {
+                NSLog("OpenClaw automatic updates disabled: \(Self.configurationProblem ?? "Sparkle is not configured.")")
+                return
+            }
             #if canImport(Sparkle)
             updaterController.updater.automaticallyChecksForUpdates = newValue
             #endif
         }
     }
 }
-
