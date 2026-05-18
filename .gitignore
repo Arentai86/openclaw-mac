@@ -1,0 +1,15 @@
+.DS_Store
+.build/
+DerivedData/
+build/
+.module-cache/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+OpenClaw/Resources/runtime/node-*/
+OpenClaw/Resources/runtime/server/node_modules/
+OpenClaw/Resources/runtime/server/.env
+cert.p12
+*.zip
+*.dmg
