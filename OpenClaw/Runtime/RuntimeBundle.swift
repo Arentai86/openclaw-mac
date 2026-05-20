@@ -101,8 +101,7 @@ struct RuntimeBundle {
                 "gateway",
                 "--port", "\(port)",
                 "--bind", "loopback",
-                "--auth", "token",
-                "--token", token,
+                "--auth", "none",
                 "--allow-unconfigured"
             ]
         }
@@ -120,18 +119,16 @@ struct RuntimeBundle {
         let entry = try serverEntryPointURL()
         guard isOpenClawPackageEntry(entry) else { return }
 
-        let stateDirectory = dataDirectory.appendingPathComponent("state", isDirectory: true)
-        try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
 
-        let configURL = stateDirectory.appendingPathComponent("openclaw.json")
+        let configURL = dataDirectory.appendingPathComponent("openclaw.json")
         var root = readJSONDictionary(at: configURL) ?? [:]
         var gateway = root["gateway"] as? [String: Any] ?? [:]
         gateway["mode"] = "local"
         gateway["port"] = port
         gateway["bind"] = "loopback"
         gateway["auth"] = [
-            "mode": "token",
-            "token": token
+            "mode": "none"
         ]
 
         var controlUi = gateway["controlUi"] as? [String: Any] ?? [:]
@@ -158,9 +155,7 @@ struct RuntimeBundle {
         components.port = port
         components.path = "/"
 
-        if (try? serverEntryPointURL()).map(isOpenClawPackageEntry) == true {
-            components.fragment = "token=\(token)"
-        } else {
+        if (try? serverEntryPointURL()).map(isOpenClawPackageEntry) != true {
             components.queryItems = [URLQueryItem(name: "token", value: token)]
         }
         return components.url
@@ -168,6 +163,7 @@ struct RuntimeBundle {
 
     func serverEnvironment(port: Int, token: String, dataDirectory: URL) -> [String: String] {
         var environment = AppSettings.environmentVariables
+        let usesOpenClawPackage = (try? serverEntryPointURL()).map(isOpenClawPackageEntry) == true
         let authEnvironment = AuthProviderCatalog.environmentVariables(
             store: KeychainStore(),
             enabledProviderIDs: AppSettings.enabledAuthProviderIDs
@@ -175,18 +171,25 @@ struct RuntimeBundle {
         environment.merge(authEnvironment) { _, new in new }
         environment["OPENCLAW_HOST"] = "127.0.0.1"
         environment["OPENCLAW_PORT"] = "\(port)"
-        environment["OPENCLAW_AUTH_TOKEN"] = token
         environment["OPENCLAW_CORS_ORIGIN"] = "http://localhost:\(port)"
         environment["OPENCLAW_DATA_DIR"] = dataDirectory.path
         environment["OPENCLAW_GATEWAY_PORT"] = "\(port)"
-        environment["OPENCLAW_GATEWAY_TOKEN"] = token
-        environment["OPENCLAW_STATE_DIR"] = dataDirectory
-            .appendingPathComponent("state", isDirectory: true)
-            .path
-        environment["OPENCLAW_CONFIG_PATH"] = dataDirectory
-            .appendingPathComponent("state", isDirectory: true)
-            .appendingPathComponent("openclaw.json")
-            .path
+        if usesOpenClawPackage {
+            environment["OPENCLAW_STATE_DIR"] = dataDirectory.path
+            environment["OPENCLAW_CONFIG_PATH"] = dataDirectory
+                .appendingPathComponent("openclaw.json")
+                .path
+        } else {
+            environment["OPENCLAW_AUTH_TOKEN"] = token
+            environment["OPENCLAW_GATEWAY_TOKEN"] = token
+            environment["OPENCLAW_STATE_DIR"] = dataDirectory
+                .appendingPathComponent("state", isDirectory: true)
+                .path
+            environment["OPENCLAW_CONFIG_PATH"] = dataDirectory
+                .appendingPathComponent("state", isDirectory: true)
+                .appendingPathComponent("openclaw.json")
+                .path
+        }
         environment["NODE_ENV"] = "production"
         return environment
     }

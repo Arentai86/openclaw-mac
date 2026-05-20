@@ -177,6 +177,11 @@ struct OpenClawModelAuthConfigurator {
             codexOrder: dedupe(codexOrder),
             dataDirectory: dataDirectory
         )
+        try writeAuthState(
+            openAIOrder: dedupe(openAIOrder),
+            codexOrder: dedupe(codexOrder),
+            dataDirectory: dataDirectory
+        )
         try updateOpenClawConfig(
             metadataProfiles: metadataProfiles,
             openAIOrder: dedupe(openAIOrder),
@@ -245,7 +250,6 @@ struct OpenClawModelAuthConfigurator {
         dataDirectory: URL
     ) throws {
         let agentDirectory = dataDirectory
-            .appendingPathComponent("state", isDirectory: true)
             .appendingPathComponent("agents", isDirectory: true)
             .appendingPathComponent("main", isDirectory: true)
             .appendingPathComponent("agent", isDirectory: true)
@@ -273,15 +277,52 @@ struct OpenClawModelAuthConfigurator {
         try writeJSONDictionary(root, to: authURL, permissions: S_IRUSR | S_IWUSR)
     }
 
+    private func writeAuthState(
+        openAIOrder: [String],
+        codexOrder: [String],
+        dataDirectory: URL
+    ) throws {
+        let agentDirectory = dataDirectory
+            .appendingPathComponent("agents", isDirectory: true)
+            .appendingPathComponent("main", isDirectory: true)
+            .appendingPathComponent("agent", isDirectory: true)
+        try FileManager.default.createDirectory(at: agentDirectory, withIntermediateDirectories: true)
+        let stateURL = agentDirectory.appendingPathComponent("auth-state.json")
+
+        var root = readJSONDictionary(at: stateURL) ?? ["version": 1]
+        var order = root["order"] as? [String: Any] ?? [:]
+        if !openAIOrder.isEmpty {
+            order["openai"] = openAIOrder
+        }
+        if !codexOrder.isEmpty {
+            order["openai-codex"] = codexOrder
+        }
+        if !order.isEmpty {
+            root["order"] = order
+        }
+
+        var lastGood = root["lastGood"] as? [String: Any] ?? [:]
+        if let firstOpenAI = openAIOrder.first {
+            lastGood["openai"] = firstOpenAI
+        }
+        if let firstCodex = codexOrder.first {
+            lastGood["openai-codex"] = firstCodex
+        }
+        if !lastGood.isEmpty {
+            root["lastGood"] = lastGood
+        }
+
+        try writeJSONDictionary(root, to: stateURL, permissions: S_IRUSR | S_IWUSR)
+    }
+
     private func updateOpenClawConfig(
         metadataProfiles: [String: [String: Any]],
         openAIOrder: [String],
         codexOrder: [String],
         dataDirectory: URL
     ) throws {
-        let stateDirectory = dataDirectory.appendingPathComponent("state", isDirectory: true)
-        try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
-        let configURL = stateDirectory.appendingPathComponent("openclaw.json")
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        let configURL = dataDirectory.appendingPathComponent("openclaw.json")
 
         var root = readJSONDictionary(at: configURL) ?? [:]
 
