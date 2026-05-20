@@ -58,7 +58,7 @@ Important review notes:
 - Credentials configured through the app are stored through macOS Keychain where supported.
 - The app is not a medical, financial, legal, or emergency tool.
 
-Current App Store readiness blocker: this build must be converted to Mac App Store signing/sandbox/provisioning before upload.
+Current upload status: build 17 / version 0.1.16 was uploaded to App Store Connect on 2026-05-20 and is processing. Nested Sparkle helpers and bundled Node were re-signed with App Store sandbox entitlements for upload analysis.
 
 ## Privacy draft
 OpenClaw does not use advertising or third-party tracking.
@@ -76,11 +76,9 @@ Prepared 1280x800 screenshots:
 Prepared App Store icon:
 - appstore/icons/openclaw-appstore-icon-1024.png
 
-## Known gates before App Store upload
-- Xcode account for Team 52FC4Q56YL is not configured locally.
-- `Mac App Distribution` certificate is missing.
-- `Mac Installer Distribution` certificate is missing.
-- Provisioning profile for `com.openclaw.app` is missing.
-- Current entitlements have `com.apple.security.app-sandbox = false`; Mac App Store requires sandboxing.
-- Sparkle updater is included; Mac App Store builds should not ship an external updater flow.
-- Current app can download/install runtime components; App Store review may reject dynamic executable/runtime installation. A Mac App Store edition may need a bundled/sandbox-compliant runtime or a clearly limited launcher design.
+## Current gates after upload
+- Build uploaded successfully and is processing in App Store Connect.
+- App Store Connect metadata still needs to be filled in the web UI or via App Store Connect API.
+- Privacy questionnaire must be completed manually/through API with accurate data-use answers.
+- Review risk remains: Sparkle/external updater and bundled Node/runtime behavior may trigger Mac App Review questions even though upload validation passed after sandbox signing.
+- Screenshots are accepted-size drafts but were upscaled from small originals; better native 1280x800/1440x900 screenshots are recommended before final review.
