@@ -16,6 +16,10 @@ enum Paths {
             .appendingPathComponent("Logs/OpenClaw", isDirectory: true)
     }
 
+    static var skillsDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("skills", isDirectory: true)
+    }
+
     static var preferencesFile: URL {
         FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Preferences/com.openclaw.app.plist")
@@ -26,7 +30,7 @@ enum Paths {
             applicationSupportDirectory,
             applicationSupportDirectory.appendingPathComponent("data", isDirectory: true),
             applicationSupportDirectory.appendingPathComponent("config", isDirectory: true),
-            applicationSupportDirectory.appendingPathComponent("skills", isDirectory: true),
+            skillsDirectory,
             applicationSupportDirectory.appendingPathComponent("cache", isDirectory: true),
             cachesDirectory,
             logsDirectory
@@ -36,4 +40,3 @@ enum Paths {
         }
     }
 }
-

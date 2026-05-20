@@ -14,6 +14,8 @@ enum AppSettingKeys {
     static let enabledAuthProviders = "enabledAuthProviders"
     static let primaryAuthProvider = "primaryAuthProvider"
     static let authProviderMethodPrefix = "authProviderMethod."
+    static let wizardCompleted = "wizardCompleted"
+    static let runtimeSource = "runtimeSource"
 }
 
 enum AppSettings {
@@ -93,9 +95,14 @@ enum AppSettings {
     }
 
     static func authMethodID(for providerID: String) -> String {
-        UserDefaults.standard.string(forKey: AppSettingKeys.authProviderMethodPrefix + providerID)
-            ?? AuthProviderCatalog.provider(id: providerID)?.defaultMethodID
-            ?? "api-key"
+        guard let provider = AuthProviderCatalog.provider(id: providerID) else {
+            return "api-key"
+        }
+        let stored = UserDefaults.standard.string(forKey: AppSettingKeys.authProviderMethodPrefix + providerID)
+        if let stored, provider.methods.contains(where: { $0.id == stored }) {
+            return stored
+        }
+        return provider.defaultMethodID
     }
 }
 
@@ -174,6 +181,32 @@ struct AuthMethodDefinition: Identifiable {
     let actionTitleKey: String?
     let actionURL: URL?
     let fields: [AuthFieldDefinition]
+    /// If non-nil, the wizard shows a "Sign in" button that opens this URL in the browser and
+    /// then polls `CLISessionDetector` for an existing CLI session.
+    let signInURL: URL?
+    /// When true, the wizard exposes a "Detect existing session" button alongside the Sign in
+    /// button and treats a detected CLI session as a valid credential (no manual fields needed).
+    let detectsCLISession: Bool
+
+    init(
+        id: String,
+        titleKey: String,
+        descriptionKey: String,
+        actionTitleKey: String? = nil,
+        actionURL: URL? = nil,
+        fields: [AuthFieldDefinition] = [],
+        signInURL: URL? = nil,
+        detectsCLISession: Bool = false
+    ) {
+        self.id = id
+        self.titleKey = titleKey
+        self.descriptionKey = descriptionKey
+        self.actionTitleKey = actionTitleKey
+        self.actionURL = actionURL
+        self.fields = fields
+        self.signInURL = signInURL
+        self.detectsCLISession = detectsCLISession
+    }
 }
 
 enum AuthProviderCatalog {
@@ -182,14 +215,9 @@ enum AuthProviderCatalog {
             id: "codex",
             displayName: "Codex / ChatGPT",
             categoryKey: "Codex account",
-            descriptionKey: "Codex login/password for OpenClaw.",
+            descriptionKey: "Use an existing Codex sign-in on this Mac or an OpenAI API key backup.",
             methods: [
-                google("https://chatgpt.com/auth/login"),
-                website("https://chatgpt.com/auth/login"),
-                loginPassword([
-                    AuthFieldDefinition(id: "login", kind: .username, environmentKey: "CODEX_LOGIN", isRequired: true),
-                    AuthFieldDefinition(id: "password", kind: .password, environmentKey: "CODEX_PASSWORD", isRequired: true)
-                ]),
+                codexCLI(),
                 apiKey("https://platform.openai.com/api-keys", "OPENAI_API_KEY", optionalFields: [
                     AuthFieldDefinition(id: "organization", kind: .organization, environmentKey: "OPENAI_ORG_ID", isRequired: false)
                 ])
@@ -200,10 +228,14 @@ enum AuthProviderCatalog {
             id: "anthropic",
             displayName: "Claude / Anthropic",
             categoryKey: "Cloud provider",
-            descriptionKey: "Cloud provider",
+            descriptionKey: "Anthropic Claude via web sign-in, email code, or API key.",
             methods: [
-                google("https://claude.ai/login"),
-                website("https://claude.ai/login"),
+                accountSignIn(
+                    id: "claude-account",
+                    titleKey: "Sign in to Claude",
+                    descriptionKey: "Sign in to Claude in your browser. If Claude desktop or CLI is installed, OpenClaw will pick up its session automatically.",
+                    signInURL: "https://claude.ai/login"
+                ),
                 emailCode([
                     AuthFieldDefinition(id: "email", kind: .username, environmentKey: "ANTHROPIC_LOGIN_EMAIL", isRequired: true)
                 ]),
@@ -214,10 +246,14 @@ enum AuthProviderCatalog {
             id: "gemini",
             displayName: "Gemini / Google AI",
             categoryKey: "Cloud provider",
-            descriptionKey: "Cloud provider",
+            descriptionKey: "Google AI Studio via Google sign-in, API key, or service account.",
             methods: [
-                google("https://aistudio.google.com/"),
-                website("https://ai.google.dev/aistudio"),
+                accountSignIn(
+                    id: "google-account",
+                    titleKey: "Sign in with Google",
+                    descriptionKey: "Sign in to Google AI Studio in your browser. If gcloud CLI is set up, OpenClaw will reuse its credentials.",
+                    signInURL: "https://aistudio.google.com/"
+                ),
                 apiKey("https://aistudio.google.com/app/apikey", "GEMINI_API_KEY"),
                 serviceAccount([
                     AuthFieldDefinition(id: "client-email", kind: .username, environmentKey: "GOOGLE_CLIENT_EMAIL", isRequired: true),
@@ -225,16 +261,35 @@ enum AuthProviderCatalog {
                 ])
             ]
         ),
-        token("github", "GitHub", "GITHUB_TOKEN", category: "Workspace provider"),
+        AuthProviderDefinition(
+            id: "github",
+            displayName: "GitHub",
+            categoryKey: "Workspace provider",
+            descriptionKey: "Sign in via the GitHub website (and gh CLI if installed) or paste a personal access token.",
+            methods: [
+                accountSignIn(
+                    id: "github-account",
+                    titleKey: "Sign in to GitHub",
+                    descriptionKey: "Sign in to GitHub.com in your browser. If gh CLI is set up, OpenClaw will reuse its session.",
+                    signInURL: "https://github.com/login"
+                ),
+                accessToken([AuthFieldDefinition(id: "token", kind: .accessToken, environmentKey: "GITHUB_TOKEN", isRequired: true)])
+            ]
+        ),
         oauth("google", "Google", "GOOGLE_OAUTH_TOKEN"),
         oauth("microsoft", "Microsoft", "MICROSOFT_OAUTH_TOKEN"),
         AuthProviderDefinition(
             id: "azure-openai",
             displayName: "Azure OpenAI",
             categoryKey: "Cloud provider",
-            descriptionKey: "Cloud provider",
+            descriptionKey: "Azure OpenAI deployments via API key + endpoint.",
             methods: [
-                website("https://ai.azure.com/"),
+                accountSignIn(
+                    id: "azure-account",
+                    titleKey: "Sign in to Azure",
+                    descriptionKey: "Sign in via Azure Portal. If az CLI is set up, OpenClaw will reuse its session.",
+                    signInURL: "https://ai.azure.com/"
+                ),
                 apiKey("https://ai.azure.com/", "AZURE_OPENAI_API_KEY", optionalFields: [
                     AuthFieldDefinition(id: "endpoint", kind: .endpoint, environmentKey: "AZURE_OPENAI_ENDPOINT", isRequired: true)
                 ])
@@ -244,9 +299,14 @@ enum AuthProviderCatalog {
             id: "aws-bedrock",
             displayName: "AWS Bedrock",
             categoryKey: "Cloud provider",
-            descriptionKey: "Cloud provider",
+            descriptionKey: "AWS Bedrock with access key, secret, and region.",
             methods: [
-                website("https://console.aws.amazon.com/bedrock/"),
+                accountSignIn(
+                    id: "aws-account",
+                    titleKey: "Sign in to AWS",
+                    descriptionKey: "Sign in via AWS Console. If AWS CLI is set up (~/.aws/credentials or SSO), OpenClaw will reuse its session.",
+                    signInURL: "https://console.aws.amazon.com/bedrock/"
+                ),
                 accessToken([
                     AuthFieldDefinition(id: "access-key", kind: .accessToken, environmentKey: "AWS_ACCESS_KEY_ID", isRequired: true),
                     AuthFieldDefinition(id: "secret-key", kind: .clientSecret, environmentKey: "AWS_SECRET_ACCESS_KEY", isRequired: true),
@@ -275,7 +335,7 @@ enum AuthProviderCatalog {
             id: "jira",
             displayName: "Jira",
             categoryKey: "Workspace provider",
-            descriptionKey: "Workspace provider",
+            descriptionKey: "Atlassian Jira via API token + host + login.",
             methods: [
                 website("https://id.atlassian.com/login"),
                 apiKey("https://id.atlassian.com/manage-profile/security/api-tokens", "JIRA_API_TOKEN", optionalFields: [
@@ -304,6 +364,7 @@ enum AuthProviderCatalog {
             "OPENCLAW_PRIMARY_AUTH_PROVIDER": AppSettings.primaryAuthProviderID
         ]
 
+        let detector = CLISessionDetector()
         for provider in providers where enabledProviderIDs.contains(provider.id) {
             let methodID = AppSettings.authMethodID(for: provider.id)
             environment["OPENCLAW_AUTH_METHOD_\(provider.id.uppercased().replacingOccurrences(of: "-", with: "_"))"] = methodID
@@ -312,6 +373,12 @@ enum AuthProviderCatalog {
                 if let value = try? store.get(key), !value.isEmpty {
                     environment[field.environmentKey] = value
                 }
+            }
+            // If this provider's chosen method relies on a CLI session, pass the credential
+            // file path to the server so it can read or shell out to the right CLI.
+            let method = provider.method(id: methodID)
+            if method.detectsCLISession, let session = detector.detect(providerID: provider.id) {
+                environment[CLISessionDetector.environmentKey(for: provider.id)] = session.path.path
             }
         }
         return environment
@@ -326,7 +393,7 @@ enum AuthProviderCatalog {
             id: id,
             displayName: name,
             categoryKey: "API provider",
-            descriptionKey: "API provider",
+            descriptionKey: "Generate an API key in the provider dashboard and paste it here.",
             methods: methods
         )
     }
@@ -336,7 +403,7 @@ enum AuthProviderCatalog {
             id: id,
             displayName: name,
             categoryKey: category,
-            descriptionKey: category,
+            descriptionKey: "Sign in on the official site and paste an access token here.",
             methods: [
                 website(officialURL(for: id) ?? "https://www.google.com/search?q=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)+login"),
                 accessToken([AuthFieldDefinition(id: "token", kind: .accessToken, environmentKey: envKey, isRequired: true)])
@@ -349,7 +416,7 @@ enum AuthProviderCatalog {
             id: id,
             displayName: name,
             categoryKey: "OAuth provider",
-            descriptionKey: "OAuth provider",
+            descriptionKey: "Complete the provider's OAuth flow, then paste the token here.",
             methods: [
                 website(officialURL(for: id) ?? "https://accounts.google.com/"),
                 oauthToken([AuthFieldDefinition(id: "oauth-token", kind: .oauthToken, environmentKey: envKey, isRequired: true)])
@@ -362,7 +429,7 @@ enum AuthProviderCatalog {
             id: id,
             displayName: name,
             categoryKey: "Local provider",
-            descriptionKey: "Local provider",
+            descriptionKey: "Point OpenClaw at a local service URL running on this Mac.",
             methods: [
                 AuthMethodDefinition(
                     id: "local-host",
@@ -406,6 +473,31 @@ enum AuthProviderCatalog {
             actionTitleKey: nil,
             actionURL: nil,
             fields: fields
+        )
+    }
+
+    private static func codexCLI() -> AuthMethodDefinition {
+        AuthMethodDefinition(
+            id: "codex-cli",
+            titleKey: "Use existing Codex sign-in",
+            descriptionKey: "Sign in to ChatGPT in your browser or detect an existing Codex CLI session on this Mac.",
+            signInURL: URL(string: "https://chatgpt.com/auth/login"),
+            detectsCLISession: true
+        )
+    }
+
+    private static func accountSignIn(
+        id: String,
+        titleKey: String,
+        descriptionKey: String,
+        signInURL: String
+    ) -> AuthMethodDefinition {
+        AuthMethodDefinition(
+            id: id,
+            titleKey: titleKey,
+            descriptionKey: descriptionKey,
+            signInURL: URL(string: signInURL),
+            detectsCLISession: true
         )
     }
 

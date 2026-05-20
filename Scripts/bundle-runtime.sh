@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME_DIR="$ROOT_DIR/OpenClaw/Resources/runtime"
-NODE_VERSION="${NODE_VERSION:-20.11.0}"
-OPENCLAW_VERSION="${OPENCLAW_VERSION:-main}"
+NODE_VERSION="${NODE_VERSION:-22.19.0}"
+OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
 OPENCLAW_REPO="${OPENCLAW_REPO:-https://github.com/openclaw/openclaw.git}"
 
 mkdir -p "$RUNTIME_DIR"
@@ -45,4 +45,3 @@ cat > "$RUNTIME_DIR/version.json" <<JSON
 JSON
 
 echo "Runtime bundled in $RUNTIME_DIR"
-

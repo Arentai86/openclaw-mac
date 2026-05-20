@@ -6,12 +6,16 @@ struct DependencyResolver {
     func validate() throws {
         _ = try runtime.nodeExecutableURL()
         _ = try runtime.serverEntryPointURL()
+        if runtime.isFallbackRuntime(at: runtime.runtimeDirectory) {
+            throw RuntimeError.placeholderRuntime
+        }
     }
 
     func statusItems() -> [DependencyStatus] {
         [
             DependencyStatus(name: "Bundled Node", isAvailable: (try? runtime.nodeExecutableURL()) != nil),
             DependencyStatus(name: "OpenClaw server", isAvailable: (try? runtime.serverEntryPointURL()) != nil),
+            DependencyStatus(name: "Production runtime", isAvailable: !runtime.requiresRuntimeSetup),
             DependencyStatus(name: "Application Support", isAvailable: FileManager.default.isWritableFile(atPath: Paths.applicationSupportDirectory.path))
         ]
     }
@@ -22,4 +26,3 @@ struct DependencyStatus: Identifiable {
     let name: String
     let isAvailable: Bool
 }
-

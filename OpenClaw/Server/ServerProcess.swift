@@ -1,11 +1,12 @@
 import Darwin
 import Foundation
 
-final class ServerProcess {
+final class ServerProcess: @unchecked Sendable {
     var onStdoutLine: ((String) -> Void)?
     var onStderrLine: ((String) -> Void)?
     var onTermination: ((Int32) -> Void)?
 
+    private let ioQueue = DispatchQueue(label: "OpenClaw.ServerProcess.IO")
     private let process = Process()
     private let stdoutPipe = Pipe()
     private let stderrPipe = Pipe()
@@ -21,8 +22,11 @@ final class ServerProcess {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
         process.terminationHandler = { [weak self] process in
-            self?.closePipes()
-            self?.onTermination?(process.terminationStatus)
+            guard let self else { return }
+            self.ioQueue.async {
+                self.closePipes()
+                self.onTermination?(process.terminationStatus)
+            }
         }
     }
 
@@ -33,10 +37,18 @@ final class ServerProcess {
         }
 
         stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            self?.consume(data: handle.availableData, isStdout: true)
+            let data = handle.availableData
+            guard let self else { return }
+            self.ioQueue.async {
+                self.consume(data: data, isStdout: true)
+            }
         }
         stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            self?.consume(data: handle.availableData, isStdout: false)
+            let data = handle.availableData
+            guard let self else { return }
+            self.ioQueue.async {
+                self.consume(data: data, isStdout: false)
+            }
         }
 
         try process.run()
@@ -51,10 +63,13 @@ final class ServerProcess {
         process.terminate()
         let deadline = Date().addingTimeInterval(gracePeriod)
         while process.isRunning && Date() < deadline {
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+            Thread.sleep(forTimeInterval: 0.05)
         }
         if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
+            let pid = process.processIdentifier
+            if pid > 0 {
+                kill(pid, SIGKILL)
+            }
         }
         closePipes()
     }

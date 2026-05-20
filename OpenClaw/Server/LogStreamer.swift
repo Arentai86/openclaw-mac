@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class LogStreamer: ObservableObject {
     @Published private(set) var lines: [String] = []
     private var fileHandle: FileHandle?
@@ -33,4 +34,3 @@ final class LogStreamer: ObservableObject {
         fileHandle = nil
     }
 }
-

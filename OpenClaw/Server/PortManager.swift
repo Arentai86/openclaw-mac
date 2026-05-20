@@ -5,14 +5,14 @@ struct PortManager {
     let defaultPort = 7842
     let searchRange = 7842...7899
 
-    func firstAvailablePort(startingAt preferredPort: Int) -> Int {
-        if isPortAvailable(UInt16(preferredPort)) {
+    func firstAvailablePort(startingAt preferredPort: Int) -> Int? {
+        if (1024...65535).contains(preferredPort), isPortAvailable(UInt16(preferredPort)) {
             return preferredPort
         }
         for port in searchRange where isPortAvailable(UInt16(port)) {
             return port
         }
-        return defaultPort
+        return nil
     }
 
     func isPortAvailable(_ port: UInt16) -> Bool {

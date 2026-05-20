@@ -10,9 +10,9 @@ struct ServerTab: View {
 
     var body: some View {
         Form {
-            Stepper("Port: \(serverPort)", value: $serverPort, in: 1024...65535)
+            Stepper(LF("Port: %d", serverPort), value: $serverPort, in: 1024...65535)
             Toggle(L("Auto-restart on crash"), isOn: $autoRestartServer)
-            Stepper("Max log size: \(maxLogSizeMB) MB", value: $maxLogSizeMB, in: 5...500, step: 5)
+            Stepper(LF("Max log size: %d MB", maxLogSizeMB), value: $maxLogSizeMB, in: 5...500, step: 5)
 
             HStack {
                 Text(L("Data location"))

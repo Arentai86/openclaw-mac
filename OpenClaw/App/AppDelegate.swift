@@ -25,13 +25,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             guard url.scheme?.lowercased() == "openclaw" else { continue }
+            NSApp.activate(ignoringOtherApps: true)
             switch url.host?.lowercased() {
             case "settings", "preferences":
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                }
+            case "restart":
+                Task { @MainActor in await AppState.shared.restartServer() }
+            case "stop":
+                AppState.shared.stopServer()
+            case "open", nil:
+                AppState.shared.openInBrowser()
             default:
                 break
             }
-            NSApp.activate(ignoringOtherApps: true)
         }
     }
 }

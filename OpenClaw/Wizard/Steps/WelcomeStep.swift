@@ -19,10 +19,10 @@ struct WelcomeStep: View {
             }
             Spacer()
             WizardFooter(
-                canGoBack: false,
+                canGoBack: true,
                 canContinue: true,
                 continueTitle: L("Continue"),
-                onBack: {},
+                onBack: coordinator.back,
                 onContinue: coordinator.next
             )
         }

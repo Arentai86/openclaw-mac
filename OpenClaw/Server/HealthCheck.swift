@@ -2,11 +2,23 @@ import Foundation
 
 struct HealthCheck {
     func ping(port: Int, token: String?) async -> Bool {
+        if await ping(path: "/health", port: port, token: token, acceptsAnyNonServerError: false) {
+            return true
+        }
+        return await ping(path: "/healthz", port: port, token: nil, acceptsAnyNonServerError: true)
+    }
+
+    private func ping(
+        path: String,
+        port: Int,
+        token: String?,
+        acceptsAnyNonServerError: Bool
+    ) async -> Bool {
         var components = URLComponents()
         components.scheme = "http"
         components.host = "127.0.0.1"
         components.port = port
-        components.path = "/health"
+        components.path = path
 
         guard let url = components.url else { return false }
 
@@ -17,10 +29,10 @@ struct HealthCheck {
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
-            return (response as? HTTPURLResponse)?.statusCode == 200
+            guard let statusCode = (response as? HTTPURLResponse)?.statusCode else { return false }
+            return acceptsAnyNonServerError ? statusCode < 500 : statusCode == 200
         } catch {
             return false
         }
     }
 }
-

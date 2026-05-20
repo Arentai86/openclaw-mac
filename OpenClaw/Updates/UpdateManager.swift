@@ -5,6 +5,7 @@ import Foundation
 import Sparkle
 #endif
 
+@MainActor
 final class UpdateManager: NSObject {
     #if canImport(Sparkle)
     private lazy var updaterController = SPUStandardUpdaterController(

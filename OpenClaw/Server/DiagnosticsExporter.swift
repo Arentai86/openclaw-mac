@@ -8,6 +8,7 @@ struct DiagnosticsExporter {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("OpenClaw-Diagnostics-\(timestamp)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
 
         try copyIfExists(Paths.logsDirectory, to: folder.appendingPathComponent("Logs"))
         try writeRedactedSettings(to: folder.appendingPathComponent("settings.txt"))
@@ -18,8 +19,13 @@ struct DiagnosticsExporter {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         process.arguments = ["-r", archive.path, folder.lastPathComponent]
         process.currentDirectoryURL = folder.deletingLastPathComponent()
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
         try process.run()
         process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         return archive
     }
 
@@ -41,4 +47,3 @@ struct DiagnosticsExporter {
         try text.write(to: url, atomically: true, encoding: .utf8)
     }
 }
-

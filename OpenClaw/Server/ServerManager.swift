@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 final class ServerManager {
     var onStatusChange: ((ServerStatus) -> Void)?
     var onPortDetected: ((Int) -> Void)?
@@ -27,37 +28,54 @@ final class ServerManager {
         try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
 
         let token = try AuthToken.ensureToken(in: dataDirectory)
+        try runtime.prepareRuntimeConfiguration(port: preferredPort, token: token, dataDirectory: dataDirectory)
+        try OpenClawModelAuthConfigurator().prepareModelAuth(dataDirectory: dataDirectory)
         let logURL = Paths.logsDirectory.appendingPathComponent("server.log")
         let process = try ServerProcess(
             executableURL: runtime.nodeExecutableURL(),
             arguments: runtime.serverArguments(
                 port: preferredPort,
                 dataDirectory: dataDirectory,
-                tokenFile: dataDirectory.appendingPathComponent("auth_token")
+                tokenFile: dataDirectory.appendingPathComponent("auth_token"),
+                token: token
             ),
-            environment: runtime.serverEnvironment(port: preferredPort, token: token),
+            environment: runtime.serverEnvironment(port: preferredPort, token: token, dataDirectory: dataDirectory),
             logURL: logURL
         )
 
         process.onStdoutLine = { [weak self] line in
-            self?.handleServerLine(line)
+            Task { @MainActor in
+                self?.handleServerLine(line)
+            }
         }
         process.onStderrLine = { [weak self] line in
-            if !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self?.appendDiagnostic("stderr: \(line)")
+            Task { @MainActor in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                self?.appendDiagnostic("stderr: \(trimmed)")
             }
         }
         process.onTermination = { [weak self] terminationStatus in
-            self?.handleTermination(status: terminationStatus)
+            Task { @MainActor in
+                self?.handleTermination(status: terminationStatus)
+            }
         }
 
         self.process = process
-        activityToken = ProcessInfo.processInfo.beginActivity(
+        let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .latencyCritical],
             reason: "OpenClaw local server is running"
         )
+        activityToken = activity
         onStatusChange?(.starting)
-        try process.start()
+        do {
+            try process.start()
+        } catch {
+            ProcessInfo.processInfo.endActivity(activity)
+            activityToken = nil
+            self.process = nil
+            throw error
+        }
         startHealthChecks(port: preferredPort, token: token)
     }
 
@@ -115,7 +133,8 @@ final class ServerManager {
         restartAttempt += 1
         onError?("Server exited with status \(status). Restarting in \(Int(delay))s.")
 
-        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard let self, self.shouldAutoRestart else { return }
             do {
                 try self.start(
@@ -132,15 +151,16 @@ final class ServerManager {
     private func startHealthChecks(port: Int, token: String) {
         healthTimer?.cancel()
 
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
         timer.schedule(deadline: .now() + 1, repeating: .seconds(2))
         timer.setEventHandler { [weak self] in
-            Task {
+            Task { @MainActor in
                 let isHealthy = await HealthCheck().ping(port: port, token: token)
+                guard let self else { return }
                 if isHealthy {
-                    self?.restartAttempt = 0
-                    self?.onPortDetected?(port)
-                    self?.onStatusChange?(.running)
+                    self.restartAttempt = 0
+                    self.onPortDetected?(port)
+                    self.onStatusChange?(.running)
                 }
             }
         }

@@ -35,7 +35,7 @@ struct QuickActions: View {
             }
 
             Button {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                openPreferences()
             } label: {
                 Label(L("Preferences..."), systemImage: "gearshape")
             }
@@ -55,5 +55,11 @@ struct QuickActions: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func openPreferences() {
+        NSApp.activate(ignoringOtherApps: true)
+        if NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) { return }
+        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
     }
 }

@@ -5,12 +5,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER="$ROOT_DIR/OpenClaw/Resources/runtime/server/index.js"
 TOKEN_FILE="$(mktemp)"
 LOG_FILE="$(mktemp)"
-PORT="${PORT:-7842}"
-TOKEN="$(python3 - <<'PY'
-import secrets
-print(secrets.token_hex(32))
-PY
-)"
+PORT="${PORT:-$(ruby -rsocket -e 's = TCPServer.new("127.0.0.1", 0); puts s.addr[1]; s.close')}"
+TOKEN="$(openssl rand -hex 32)"
 printf "%s\n" "$TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 

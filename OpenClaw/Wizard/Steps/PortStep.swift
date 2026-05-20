@@ -24,9 +24,10 @@ struct PortStep: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 120)
                 Button(L("Auto-detect")) {
-                    let port = PortManager().firstAvailablePort(startingAt: 7842)
-                    portText = "\(port)"
-                    serverPort = port
+                    if let port = PortManager().firstAvailablePort(startingAt: 7842) {
+                        portText = "\(port)"
+                        serverPort = port
+                    }
                 }
             }
 

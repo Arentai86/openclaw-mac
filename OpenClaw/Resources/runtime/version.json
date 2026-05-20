@@ -1,4 +1,9 @@
 {
-  "version": "main",
-  "node": "20.11.0"
+  "version": "fallback-dev",
+  "node": "22.19.0",
+  "source": "bundled",
+  "kind": "smoke-test",
+  "runtime": "fallback",
+  "fallback": true,
+  "placeholder": true
 }

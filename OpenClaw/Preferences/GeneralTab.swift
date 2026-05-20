@@ -12,6 +12,8 @@ private extension View {
 }
 
 struct GeneralTab: View {
+    @EnvironmentObject private var appState: AppState
+    @ObservedObject private var localization = AppLocalization.shared
     @AppStorage(AppSettingKeys.launchAtLogin) private var launchAtLogin = true
     @AppStorage(AppSettingKeys.checkForUpdatesAutomatically) private var checkForUpdatesAutomatically = true
     @AppStorage(AppSettingKeys.startServerOnLaunch) private var startServerOnLaunch = true
@@ -19,6 +21,15 @@ struct GeneralTab: View {
 
     var body: some View {
         Form {
+            Picker(L("Language"), selection: Binding(
+                get: { localization.languageCode },
+                set: { localization.setLanguage($0) }
+            )) {
+                ForEach(AppLocalization.supportedLanguages) { language in
+                    Text(language.nativeName).tag(language.code)
+                }
+            }
+
             Toggle(L("Start server when OpenClaw launches"), isOn: $startServerOnLaunch)
 
             Toggle(L("Launch at login"), isOn: $launchAtLogin)
@@ -32,11 +43,20 @@ struct GeneralTab: View {
                 }
 
             Toggle(L("Check for updates automatically"), isOn: $checkForUpdatesAutomatically)
+                .onChangeCompat(of: checkForUpdatesAutomatically) { enabled in
+                    appState.updateManager?.automaticallyChecksForUpdates = enabled
+                }
 
             if let launchAtLoginError {
                 Text(launchAtLoginError)
                     .foregroundStyle(.red)
                     .font(.caption)
+            }
+
+            Divider()
+
+            Button(L("Open Setup Assistant...")) {
+                WizardWindowController.shared.show(appState: appState)
             }
         }
         .formStyle(.grouped)

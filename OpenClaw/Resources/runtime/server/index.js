@@ -97,8 +97,8 @@ function html() {
   <main>
     <h1>OpenClaw local runtime</h1>
     <p class="ok">Launcher connection is working.</p>
-    <p>This bundled fallback runtime proves that the macOS launcher can start a local secured server, pass health checks, and open the browser UI.</p>
-    <p class="warn">For production, replace <code>OpenClaw/Resources/runtime/server</code> with the real OpenClaw server via <code>Scripts/bundle-runtime.sh</code>.</p>
+    <p>This is only a launcher smoke-test runtime. It is not the real OpenClaw server UI.</p>
+    <p class="warn">Open the macOS setup assistant and install the real OpenClaw runtime before testing the product workflow.</p>
     <p>Data directory: <code>${dataDir.replace(/</g, "&lt;")}</code></p>
   </main>
 </body>
@@ -152,7 +152,31 @@ server.listen(port, host, () => {
   console.log(`LISTENING_ON:${port}`);
 });
 
-process.on("SIGTERM", () => {
+function shutdown(signal) {
+  console.log(`OPENCLAW_SHUTDOWN:${signal}`);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGHUP", () => shutdown("SIGHUP"));
+
+process.on("uncaughtException", (error) => {
+  console.error(`OPENCLAW_UNCAUGHT:${error.stack || error.message}`);
+  process.exit(1);
 });
+process.on("unhandledRejection", (reason) => {
+  console.error(`OPENCLAW_UNHANDLED_REJECTION:${reason && reason.stack ? reason.stack : String(reason)}`);
+});
+
+// Detect parent crash: when the macOS launcher dies without calling SIGTERM,
+// the kernel reparents this process to launchd (pid 1). Watching ppid catches that case.
+const originalParentPid = process.ppid;
+const parentWatcher = setInterval(() => {
+  if (process.ppid !== originalParentPid) {
+    console.log(`OPENCLAW_PARENT_LOST:${originalParentPid}->${process.ppid}`);
+    shutdown("PARENT_LOST");
+  }
+}, 2000);
+parentWatcher.unref();

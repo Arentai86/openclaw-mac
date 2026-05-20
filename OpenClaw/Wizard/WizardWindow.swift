@@ -9,13 +9,15 @@ final class WizardWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 480),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "OpenClaw Setup"
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 640, height: 560)
+        window.backgroundColor = NSColor(calibratedRed: 0.965, green: 0.972, blue: 0.982, alpha: 1)
         window.center()
         super.init(window: window)
     }
@@ -43,26 +45,51 @@ struct WizardRootView: View {
     @ObservedObject var coordinator: WizardCoordinator
 
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                switch coordinator.step {
-                case .welcome:
-                    WelcomeStep(coordinator: coordinator)
-                case .systemCheck:
-                    SystemCheckStep(coordinator: coordinator)
-                case .dataLocation:
-                    DataLocationStep(coordinator: coordinator)
-                case .port:
-                    PortStep(coordinator: coordinator)
-                case .apiKeys:
-                    APIKeysStep(coordinator: coordinator)
-                case .finish:
-                    FinishStep(coordinator: coordinator)
+        ZStack(alignment: .topLeading) {
+            OpenzenBrandedContainer {
+                Group {
+                    switch coordinator.step {
+                    case .setupAction:
+                        SetupActionStep(coordinator: coordinator)
+                    case .language:
+                        LanguageStep(coordinator: coordinator)
+                    case .welcome:
+                        WelcomeStep(coordinator: coordinator)
+                    case .systemCheck:
+                        SystemCheckStep(coordinator: coordinator)
+                    case .source:
+                        SourceStep(coordinator: coordinator)
+                    case .dataLocation:
+                        DataLocationStep(coordinator: coordinator)
+                    case .port:
+                        PortStep(coordinator: coordinator)
+                    case .apiKeys:
+                        APIKeysStep(coordinator: coordinator)
+                    case .skills:
+                        SkillsStep(coordinator: coordinator)
+                    case .finish:
+                        FinishStep(coordinator: coordinator)
+                    }
                 }
+                .environment(\.layoutDirection, AppLocalization.shared.layoutDirection)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if coordinator.canShowBackArrow {
+                Button {
+                    coordinator.back()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .accessibilityLabel(L("Back"))
+                .padding(.leading, 12)
+                .padding(.top, 18)
+            }
         }
-        .frame(width: 600, height: 480)
+        .frame(minWidth: 640, minHeight: 560)
     }
 }
-

@@ -3,7 +3,24 @@ import Foundation
 
 struct Uninstaller {
     func uninstall() throws {
+        try removeOpenClawData()
+
+        NSWorkspace.shared.recycle([Bundle.main.bundleURL]) { _, error in
+            if let error {
+                NSLog("Failed to move app to Trash: \(error.localizedDescription)")
+            }
+            Task { @MainActor in
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
+    /// Removes OpenClaw's installed runtime, data, logs, preferences, and saved credentials
+    /// without moving the .app to Trash. The setup wizard uses this for rollback when the
+    /// user navigates back through installation steps.
+    func removeOpenClawData() throws {
         try? LaunchAtLogin.setEnabled(false)
+        resetUserDefaults()
 
         let store = KeychainStore()
         store.removeAllKnownItems(keys: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] + AuthProviderCatalog.allKeychainKeys)
@@ -18,13 +35,32 @@ struct Uninstaller {
         for url in urls {
             try removeIfSafe(url)
         }
+    }
 
-        NSWorkspace.shared.recycle([Bundle.main.bundleURL]) { _, error in
-            if let error {
-                NSLog("Failed to move app to Trash: \(error.localizedDescription)")
-            }
-            NSApp.terminate(nil)
+    private func resetUserDefaults() {
+        let keys = [
+            AppSettingKeys.serverPort,
+            AppSettingKeys.autoRestartServer,
+            AppSettingKeys.dataLocation,
+            AppSettingKeys.launchAtLogin,
+            AppSettingKeys.checkForUpdatesAutomatically,
+            AppSettingKeys.startServerOnLaunch,
+            AppSettingKeys.maxLogSizeMB,
+            AppSettingKeys.customNodePath,
+            AppSettingKeys.environmentVariablesRaw,
+            AppSettingKeys.enabledAuthProviders,
+            AppSettingKeys.primaryAuthProvider,
+            AppSettingKeys.wizardCompleted,
+            AppSettingKeys.runtimeSource
+        ]
+
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
         }
+        for provider in AuthProviderCatalog.providers {
+            UserDefaults.standard.removeObject(forKey: AppSettingKeys.authProviderMethodPrefix + provider.id)
+        }
+        UserDefaults.standard.synchronize()
     }
 
     private func removeIfSafe(_ url: URL) throws {

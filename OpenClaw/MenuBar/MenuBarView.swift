@@ -5,6 +5,9 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            OpenzenLogoView(width: 58, height: 38)
+                .frame(maxWidth: .infinity)
+
             HStack(spacing: 10) {
                 StatusDot(status: appState.serverStatus)
                 VStack(alignment: .leading, spacing: 3) {
@@ -30,9 +33,15 @@ struct MenuBarView: View {
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            Divider()
+
+            OpenzenBrandFooter(font: .caption2)
         }
         .padding(14)
         .frame(width: 320)
+        .background(OpenzenBranding.background)
+        .preferredColorScheme(.light)
     }
 }
 

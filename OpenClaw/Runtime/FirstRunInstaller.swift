@@ -6,16 +6,24 @@ struct FirstRunInstaller {
 
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
         let marker = Paths.applicationSupportDirectory.appendingPathComponent(".installed")
-        let isFirstRun = !FileManager.default.fileExists(atPath: marker.path)
+        let isFreshInstall = !FileManager.default.fileExists(atPath: marker.path)
 
-        if isFirstRun {
+        if isFreshInstall {
             try copyDefaultRuntimeDataIfPresent()
         }
 
         let record = InstallationRecord(version: version, installedAt: Date())
         let data = try JSONEncoder.installRecordEncoder.encode(record)
         try data.write(to: marker, options: .atomic)
-        return isFirstRun
+
+        // The wizard "first run" flag is independent of the install marker so the wizard
+        // re-appears if the user closed it without finishing.
+        let wizardCompleted = UserDefaults.standard.bool(forKey: AppSettingKeys.wizardCompleted)
+        return !wizardCompleted
+    }
+
+    func markWizardCompleted() {
+        UserDefaults.standard.set(true, forKey: AppSettingKeys.wizardCompleted)
     }
 
     private func copyDefaultRuntimeDataIfPresent() throws {
